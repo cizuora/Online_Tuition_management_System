@@ -1,9 +1,8 @@
-#!/usr/bin/env python3
 """
 @file init_db.py
 @date 2026-04-08
 @author Chidera Izuora and Murat Talum
-@version 1.0
+@version 1.2
 
 @brief Initializes the database with necessary tables and default data.
 
@@ -13,9 +12,13 @@ This module creates the SQLite database 'tuition.db' with three tables:
 - payments: Records payment transaction history
 
 The database is pre-populated with sample data for testing:
-- 2 student accounts (John Doe, Jane Smith)
+- 2 student accounts (John Doe, Jane Smith) with student IDs
 - 1 admin account
 - Fee items for Spring 2026 semester
+
+Changes in v1.2:
+- Changed balance/amount columns from REAL to DECIMAL(10,2) for precise currency
+- Added two decimal place formatting for all monetary values
 
 Usage:
     python init_db.py
@@ -34,7 +37,7 @@ def hash_password(password: str) -> str:
     @return Hexadecimal string representation of the SHA-256 hash
 
     @note This is a one-way hash - cannot be reversed to original password
-    @warning For production, use bcrypt or PBKDF2 with salt instead of SHA-25
+    @warning For production, use bcrypt or PBKDF2 with salt instead of SHA-256
     """
     return hashlib.sha256(password.encode()).hexdigest()
 
@@ -44,7 +47,12 @@ class InitDB:
     @class InitDB
     @brief Handles database initialization and schema setup.
 
-    This class encapsulates all database setup operations...
+    This class encapsulates all database setup operations including:
+    - Creating database tables with proper schema
+    - Inserting default/sample data
+    - Managing database connections
+
+    @note Run only once when setting up the application for the first time
     """
 
     def __init__(self, db_path: str = "tuition.db"):
@@ -56,14 +64,13 @@ class InitDB:
         self.connection = None
         self.cursor = None
 
-    """
-        @brief Establishes connection to SQLite database.
-        
-        @throws sqlite3.Error If connection fails (file permissions, disk full, etc.)
-        
-        @note Automatically creates database file if it doesn't exist
-    """
     def connect(self) -> None:
+        """
+        @brief Establishes connection to SQLite database.
+
+        @throws sqlite3.Error If connection fails (file permissions, disk full, etc.)
+        @note Automatically creates database file if it doesn't exist
+        """
         try:
             self.connection = sqlite3.connect(self.db_path)
             self.cursor = self.connection.cursor()
@@ -72,43 +79,57 @@ class InitDB:
             print(f"✗ Database connection failed: {e}")
             raise
 
-    """
-        @brief Closes database connection and cursor.
-        
-        @note Always call this after database operations to free resources
-    """
     def disconnect(self) -> None:
+        """
+        @brief Closes database connection and cursor.
+
+        @note Always call this after database operations to free resources
+        """
         if self.cursor:
             self.cursor.close()
         if self.connection:
             self.connection.close()
         print("✓ Database connection closed")
 
-    """
-        @brief Creates all necessary tables if they don't exist.
-        
-        Creates three tables:
-        1. students - Account information and current balance
-        2. fee_items - Semester-specific charges per student
-        3. payments - Payment transaction history
-        
-        @throws sqlite3.Error If SQL syntax is invalid or constraint fails
-        
-        @note Uses IF NOT EXISTS so running multiple times is safe
-    """
+    def reset_database(self) -> None:
+        """
+        @brief Drops all tables (for fresh start).
+
+        @warning This deletes ALL data! Use carefully.
+        """
+        print("Resetting database (deleting all tables)...")
+
+        self.cursor.execute("DROP TABLE IF EXISTS payments")
+        self.cursor.execute("DROP TABLE IF EXISTS fee_items")
+        self.cursor.execute("DROP TABLE IF EXISTS students")
+        print("  ✓ All tables dropped")
+
+        self.connection.commit()
+
     def create_tables(self) -> None:
+        """
+        @brief Creates all necessary tables if they don't exist.
+
+        Creates three tables:
+        1. students - Account information and current balance (DECIMAL for currency)
+        2. fee_items - Semester-specific charges per student (DECIMAL for amounts)
+        3. payments - Payment transaction history (DECIMAL for amounts)
+
+        @throws sqlite3.Error If SQL syntax is invalid or constraint fails
+        @note Uses IF NOT EXISTS so running multiple times is safe
+        """
         print("Creating tables...")
 
-        # Table 1: students (UPDATED with student_id)
+        # Table 1: students with DECIMAL for balance (two decimal places)
         self.cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS students (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                student_id TEXT UNIQUE NOT NULL,  -- NEW! Format: "sh046186"
+                student_id TEXT UNIQUE NOT NULL,
                 name TEXT NOT NULL,
                 email TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
-                balance REAL DEFAULT 0.0,
+                balance DECIMAL(10,2) DEFAULT 0.00,
                 role TEXT DEFAULT 'student',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -124,7 +145,7 @@ class InitDB:
         )
         print("  ✓ index on student_id created")
 
-        # Table 2: fee_items (unchanged)
+        # Table 2: fee_items with DECIMAL for amount
         self.cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS fee_items (
@@ -132,7 +153,7 @@ class InitDB:
                 student_id INTEGER NOT NULL,
                 semester TEXT NOT NULL,
                 description TEXT NOT NULL,
-                amount REAL NOT NULL,
+                amount DECIMAL(10,2) NOT NULL,
                 category TEXT,
                 FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
             )
@@ -140,13 +161,13 @@ class InitDB:
         )
         print("  ✓ fee_items table created")
 
-        # Table 3: payments (unchanged)
+        # Table 3: payments with DECIMAL for amount
         self.cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS payments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 student_id INTEGER NOT NULL,
-                amount REAL NOT NULL,
+                amount DECIMAL(10,2) NOT NULL,
                 payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 mock_mode BOOLEAN DEFAULT 1,
                 FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
@@ -158,21 +179,22 @@ class InitDB:
         self.connection.commit()
         print("✓ All tables created successfully")
 
-    """
+    def insert_sample_data(self) -> None:
+        """
         @brief Populates database with sample data for testing.
-        
+
         Inserts:
         - 2 student accounts (John Doe, Jane Smith) with different balances
         - 1 admin account with ID 99
         - Fee items for Spring 2026 semester for John Doe
-        
+
         @note Uses INSERT OR REPLACE to allow re-running without errors
         @warning Sample passwords are 'pass123' for students and 'admin123' for admin
-    """
-    def insert_sample_data(self) -> None:
+        """
         print("Inserting sample data...")
 
         # Updated: (id, student_id, name, email, password_hash, balance, role)
+        # Balance values are DECIMAL - will store exactly with 2 decimal places
         sample_students = [
             (
                 1,
@@ -214,7 +236,7 @@ class InitDB:
         print("    Student logins: sh046186, sh089234")
         print("    Admin login: admin001")
 
-        # Fee items remain the same (still reference student's internal id, not student_id)
+        # Fee items with DECIMAL amounts
         sample_fee_items = [
             (1, 1, "Spring 2026", "Tuition - 12 credits", 3600.00, "Tuition"),
             (2, 1, "Spring 2026", "Lab Fees - Chemistry 101", 350.00, "Fees"),
@@ -234,15 +256,14 @@ class InitDB:
         self.connection.commit()
         print("✓ All sample data inserted successfully")
 
-    """
+    def verify_data(self) -> dict:
+        """
         @brief Verifies that database was populated correctly.
-        
+
         @return Dictionary containing counts of records in each table
         @throws sqlite3.Error If verification queries fail
-        
         @note Useful for debugging and confirming successful initialization
-    """
-    def verify_data(self) -> dict:
+        """
         print("\nVerifying database contents...")
 
         verification = {}
@@ -262,40 +283,51 @@ class InitDB:
         verification["payments"] = self.cursor.fetchone()[0]
         print(f"  Payments: {verification['payments']}")
 
-        # Show student details with student_id
+        # Show student details with formatted balance (2 decimal places)
         self.cursor.execute(
-            "SELECT id, student_id, name, email, balance, role FROM students"
+            """
+            SELECT id, student_id, name, email, balance, role FROM students
+        """
         )
         students = self.cursor.fetchall()
         print("\n  Student accounts created:")
         for student in students:
+            # Format balance to always show 2 decimal places
+            balance_formatted = f"${student[4]:.2f}"
             print(
-                f"    - ID: {student[0]}, Student ID: {student[1]}, Name: {student[2]}, Balance: ${student[4]:.2f}, Role: {student[5]}"
+                f"    - ID: {student[0]}, Student ID: {student[1]}, "
+                f"Name: {student[2]}, Balance: {balance_formatted}, Role: {student[5]}"
             )
 
         return verification
 
-    """
+    def run(self, reset: bool = False) -> bool:
+        """
         @brief Executes complete database initialization workflow.
-        
+
+        @param reset If True, drops existing tables before creating new ones
         @return True if initialization successful, False otherwise
-        
+
         Workflow:
         1. Connect to database
-        2. Create all tables
-        3. Insert sample data
-        4. Verify data integrity
-        5. Disconnect
-        
+        2. Optionally reset (drop all tables)
+        3. Create all tables
+        4. Insert sample data
+        5. Verify data integrity
+        6. Disconnect
+
         @note This is the main method to call for full initialization
-    """
-    def run(self) -> bool:
+        """
         try:
             print("=" * 50)
             print("Tuition Management System - Database Initialization")
             print("=" * 50)
 
             self.connect()
+
+            if reset:
+                self.reset_database()
+
             self.create_tables()
             self.insert_sample_data()
             verification = self.verify_data()
@@ -319,27 +351,22 @@ class InitDB:
 
 
 # MAIN EXECUTION
-"""
-    @brief Main entry point when script is run directly.
-    
-    Creates an InitDB instance and runs the initialization.
-    Only executes if this file is run directly (not imported as a module).
-"""
 if __name__ == "__main__":
     print(
         """
-        Online Tuition Management System - Database Setup    
-                                                              
-        Authors: Chidera Izuora & Murat Talum                  
-        Date: April 8, 2026                                     
-        Version: 1.0                                            
     
+            Online Tuition Management System - Database Setup        
+                                                                  
+            Authors: Chidera Izuora & Murat Talum                    
+            Date: April 8, 2026                                      
+            Version: 1.2                                             
     """
     )
 
     # Create and run database initializer
+    # Set reset=True to completely rebuild the database
     db_initializer = InitDB()
-    success = db_initializer.run()
+    success = db_initializer.run(reset=False)  # Change to True to force reset
 
     # Exit with appropriate code
     if success:
