@@ -75,12 +75,6 @@
             border: 1px solid #ddd;
             border-radius: 6px;
             font-size: 14px;
-            transition: border-color 0.3s;
-        }
-
-        .form-group input:focus {
-            outline: none;
-            border-color: #4e73df;
         }
 
         .login-btn {
@@ -93,7 +87,6 @@
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-            transition: background 0.3s;
         }
 
         .login-btn:hover {
@@ -110,8 +103,6 @@
             color: #555;
             font-size: 13px;
             margin-bottom: 12px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
         }
 
         .credential-box {
@@ -127,10 +118,6 @@
             color: #1f2d4d;
             width: 70px;
             display: inline-block;
-        }
-
-        .credential-box span {
-            color: #666;
         }
     </style>
 </head>
@@ -153,25 +140,23 @@
                 <label>Student ID</label>
                 <input type="text" name="student_id" placeholder="e.g., sh046186" required autofocus>
             </div>
-
             <div class="form-group">
                 <label>Password</label>
                 <input type="password" name="password" required>
             </div>
-
             <button type="submit" class="login-btn">Login</button>
         </form>
 
         <div class="test-credentials">
             <h3>Test Credentials</h3>
             <div class="credential-box">
-                <strong>Student 1:</strong> <span>sh046186 / pass123</span>
+                <strong>Student 1:</strong> sh046186 / pass123
             </div>
             <div class="credential-box">
-                <strong>Student 2:</strong> <span>sh089234 / pass123</span>
+                <strong>Student 2:</strong> sh089234 / pass123
             </div>
             <div class="credential-box">
-                <strong>Admin:</strong> <span>admin001 / admin123</span>
+                <strong>Admin:</strong> admin001 / admin123
             </div>
         </div>
     </div>

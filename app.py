@@ -110,6 +110,13 @@ def student_dashboard():
     statement = tuition_service.generate_fee_statement(student_id)
     payment_history = tuition_service.get_payment_history(student_id)
 
+    # Debug print to see what's being returned
+    print(f"DEBUG - Statement keys: {statement.keys() if statement else 'None'}")
+    print(f"DEBUG - Items type: {type(statement.get('items')) if statement else 'N/A'}")
+    print(
+        f"DEBUG - Items length: {len(statement.get('items')) if statement and statement.get('items') else 0}"
+    )
+
     return render_template(
         "student_dashboard.html",
         student=balance_info,
@@ -229,6 +236,30 @@ def api_admin_create_plan():
     return jsonify(result)
 
 
+@app.route("/debug-data")
+def debug_data():
+    from services import TuitionService
+
+    service = TuitionService()
+
+    student_id = "sh046186"
+    balance = service.get_student_balance(student_id)
+    statement = service.generate_fee_statement(student_id)
+
+    return {
+        "balance_exists": balance is not None,
+        "statement_exists": statement is not None,
+        "statement_keys": list(statement.keys()) if statement else [],
+        "items_type": str(type(statement.get("items"))) if statement else "N/A",
+        "items_length": (
+            len(statement.get("items")) if statement and statement.get("items") else 0
+        ),
+        "first_item": (
+            statement.get("items")[0] if statement and statement.get("items") else None
+        ),
+    }
+
+
 # ERROR HANDLERS
 
 
@@ -244,7 +275,6 @@ def internal_error(error):
     return jsonify({"error": "Internal server error"}), 500
 
 
- 
 # MAIN ENTRY POINT
 
 

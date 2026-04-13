@@ -27,7 +27,14 @@ class Student:
     """
 
     def __init__(
-        self, id: int, student_id: str, name: str, email: str, balance: float, role: str
+        self,
+        id: int,
+        student_id: str,
+        name: str,
+        email: str,
+        password_hash: str,
+        balance: float,
+        role: str,
     ):
         """
         @brief Constructor for Student object.
@@ -43,6 +50,7 @@ class Student:
         self.student_id = student_id
         self.name = name
         self.email = email
+        self.password_hash = password_hash  # ADD this line
         self.balance = balance
         self.role = role
 
@@ -82,6 +90,7 @@ class Student:
                 student_id=row["student_id"],
                 name=row["name"],
                 email=row["email"],
+                password_hash=row["password_hash"],  # ADD this
                 balance=row["balance"],
                 role=row["role"],
             )
@@ -110,6 +119,7 @@ class Student:
                 student_id=row["student_id"],
                 name=row["name"],
                 email=row["email"],
+                password_hash=row["password_hash"],  # ADD this
                 balance=row["balance"],
                 role=row["role"],
             )
