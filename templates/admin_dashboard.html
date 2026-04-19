@@ -36,6 +36,11 @@
             margin-bottom: 20px;
         }
 
+        h2 {
+            color: #1f2d4d;
+            margin-bottom: 15px;
+        }
+
         .header {
             display: flex;
             justify-content: space-between;
@@ -76,6 +81,7 @@
             padding: 10px 20px;
             border-radius: 6px;
             cursor: pointer;
+            margin-bottom: 10px;
         }
 
         .result {
@@ -115,6 +121,28 @@
             <button onclick="lookupStudent()">Lookup Student</button>
 
             <div id="result" class="result"></div>
+
+            <hr>
+
+            <h2>Create Payment Plan</h2>
+            <div class="form-group">
+                <label>Student ID</label>
+                <input type="text" id="plan_student_id" placeholder="e.g., sh089234">
+            </div>
+
+            <div class="form-group">
+                <label>Number of Payments</label>
+                <input type="number" id="num_payments" placeholder="e.g., 4" min="1" max="24">
+            </div>
+
+            <div class="form-group">
+                <label>Custom Payment Amount (optional)</label>
+                <input type="number" id="custom_amount" placeholder="e.g., 250.00" step="0.01">
+            </div>
+
+            <button onclick="createPaymentPlan()">Create Payment Plan</button>
+
+            <div id="plan-result" class="result"></div>
         </div>
     </div>
 
@@ -139,6 +167,50 @@
                     <p><strong>Balance:</strong> ${data.student.balance_formatted}</p>
                     <p><strong>Payment History:</strong> ${data.payment_history.count} payments</p>
                     <p><strong>Total Paid:</strong> ${data.payment_history.total_paid_formatted}</p>
+                `;
+                resultDiv.style.display = 'block';
+            } else {
+                resultDiv.innerHTML = `<p style="color:red;">Error: ${data.message}</p>`;
+                resultDiv.style.display = 'block';
+            }
+        }
+
+        async function createPaymentPlan() {
+            const studentId = document.getElementById('plan_student_id').value;
+            const numPayments = document.getElementById('num_payments').value;
+            const customAmount = document.getElementById('custom_amount').value;
+
+            if (!studentId || !numPayments) {
+                alert('Please enter student ID and number of payments');
+                return;
+            }
+
+            const payload = {
+                student_id: studentId,
+                num_payments: parseInt(numPayments)
+            };
+
+            if (customAmount) {
+                payload.custom_amount = parseFloat(customAmount);
+            }
+
+            const response = await fetch('/api/admin/create-plan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+
+            const resultDiv = document.getElementById('plan-result');
+            if (data.success) {
+                resultDiv.innerHTML = `
+                    <h3>Payment Plan Created</h3>
+                    <p><strong>Student:</strong> ${data.plan_details.student_name}</p>
+                    <p><strong>Student ID:</strong> ${data.plan_details.student_id}</p>
+                    <p><strong>Number of Payments:</strong> ${data.plan_details.num_payments}</p>
+                    <p><strong>Payment Amount:</strong> ${data.plan_details.payment_amount_formatted}</p>
+                    <p><strong>Total Balance:</strong> ${data.plan_details.total_balance_formatted}</p>
                 `;
                 resultDiv.style.display = 'block';
             } else {
