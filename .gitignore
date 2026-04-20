@@ -1,0 +1,20 @@
+# Stripe secret keys
+stripe.env
+.env
+*.env
+
+# Database
+tuition.db
+*.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# IDE
+.idea/

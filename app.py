@@ -14,9 +14,21 @@ This module handles:
 """
 
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+import stripe
+import os
+from dotenv import load_dotenv
 from datetime import datetime
 from models import Student
 from services import TuitionService
+
+# Load Stripe keys from stripe.env
+load_dotenv("stripe.env")
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
+STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
+
+print(
+    f"✅ Stripe configured. Secret key loaded: {stripe.api_key[:15] if stripe.api_key else 'NOT FOUND'}..."
+)
 
 # Create Flask app
 app = Flask(__name__)
@@ -105,23 +117,20 @@ def student_dashboard():
 
     student_id = session["student_id"]
 
+    # Get any payment message
+    payment_message = session.pop("payment_message", None)
+
     # Get student data
     balance_info = tuition_service.get_student_balance(student_id)
     statement = tuition_service.generate_fee_statement(student_id)
     payment_history = tuition_service.get_payment_history(student_id)
-
-    # Debug print to see what's being returned
-    print(f"DEBUG - Statement keys: {statement.keys() if statement else 'None'}")
-    print(f"DEBUG - Items type: {type(statement.get('items')) if statement else 'N/A'}")
-    print(
-        f"DEBUG - Items length: {len(statement.get('items')) if statement and statement.get('items') else 0}"
-    )
 
     return render_template(
         "student_dashboard.html",
         student=balance_info,
         statement=statement,
         payment_history=payment_history,
+        payment_message=payment_message,
         current_year=datetime.now().year,
     )
 
@@ -236,6 +245,57 @@ def api_admin_create_plan():
     return jsonify(result)
 
 
+@app.route("/api/create-checkout", methods=["POST"])
+def create_checkout():
+    """Create Stripe Checkout session for payment."""
+    if "student_id" not in session:
+        return jsonify({"error": "Not logged in"}), 401
+
+    try:
+        data = request.get_json()
+        amount = float(data.get("amount", 0))
+        amount_cents = int(amount * 100)
+
+        if amount <= 0:
+            return jsonify({"error": "Amount must be greater than 0"}), 400
+
+        student_id = session.get("student_id")
+        student = Student.find_by_student_id(student_id)
+
+        if not student:
+            return jsonify({"error": "Student not found"}), 404
+
+        # Store amount in session to use after payment
+        session["pending_payment_amount"] = amount
+
+        checkout_session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[
+                {
+                    "price_data": {
+                        "currency": "usd",
+                        "product_data": {
+                            "name": "Tuition Payment",
+                            "description": f"Payment for {student.name} - ID: {student_id}",
+                        },
+                        "unit_amount": amount_cents,
+                    },
+                    "quantity": 1,
+                }
+            ],
+            mode="payment",
+            success_url="http://localhost:5000/payment-success?amount=" + str(amount),
+            cancel_url="http://localhost:5000/payment-cancel",
+            metadata={"student_id": student_id, "amount": amount},
+        )
+
+        return jsonify({"url": checkout_session.url})
+
+    except Exception as e:
+        print(f"Stripe error: {e}")
+        return jsonify({"error": str(e)}), 400
+
+
 @app.route("/debug-data")
 def debug_data():
     from services import TuitionService
@@ -258,6 +318,30 @@ def debug_data():
             statement.get("items")[0] if statement and statement.get("items") else None
         ),
     }
+
+
+@app.route("/payment-success")
+def payment_success():
+    """Handle successful payment and update balance."""
+    # Get amount from URL parameter
+    amount = request.args.get("amount", type=float)
+    student_id = session.get("student_id")
+
+    if student_id and amount:
+        # Process the payment
+        result = tuition_service.process_payment(student_id, amount)
+        print(f"Payment processed: {result}")
+
+        if result.get("success"):
+            # Store success message for dashboard
+            session["payment_message"] = f"Payment of ${amount:.2f} was successful!"
+
+    return render_template("success.html")
+
+
+@app.route("/payment-cancel")
+def payment_cancel():
+    return render_template("cancel.html")
 
 
 # ERROR HANDLERS

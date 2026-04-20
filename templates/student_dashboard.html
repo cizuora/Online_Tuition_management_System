@@ -106,6 +106,10 @@
             font-weight: bold;
         }
 
+        .pay-btn:hover {
+            background: #e0a800;
+        }
+
         .message {
             padding: 10px;
             border-radius: 6px;
@@ -158,12 +162,6 @@
             border-radius: 8px;
             margin-top: 20px;
         }
-
-        @media (max-width: 768px) {
-            .dashboard-grid {
-                grid-template-columns: 1fr;
-            }
-        }
     </style>
 </head>
 
@@ -174,7 +172,11 @@
             <a href="/logout" class="logout-btn">Logout</a>
         </div>
 
-        <div id="message-area"></div>
+        <div id="message-area">
+            {% if payment_message %}
+            <div class="message success">{{ payment_message }}</div>
+            {% endif %}
+        </div>
 
         <div class="dashboard-grid">
             <!-- Left Column -->
@@ -191,7 +193,7 @@
                     <div class="payment-form">
                         <input type="number" id="payment-amount" class="payment-input" placeholder="Enter amount"
                             step="0.01">
-                        <button class="pay-btn" onclick="makePayment()">Pay Now</button>
+                        <button class="pay-btn" onclick="makeStripePayment()">Pay with Stripe</button>
                     </div>
                 </div>
 
@@ -204,12 +206,12 @@
                                 <th>Amount</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody id="transactions-body">
                             {% if payment_history and payment_history.payments %}
-                            {% for p in payment_history.payments[:5] %}
+                            {% for p in payment_history.payments %}
                             <tr>
                                 <td>{{ p.date }}</td>
-                                <td>${{ "%.2f"|format(p.amount) }}</td>
+                                <td>-${{ "%.2f"|format(p.amount) }}</td>
                             </tr>
                             {% endfor %}
                             {% else %}
@@ -259,7 +261,8 @@
     </div>
 
     <script>
-        async function makePayment() {
+        // Stripe payment (redirects to Stripe checkout)
+        async function makeStripePayment() {
             const amount = document.getElementById('payment-amount').value;
 
             if (!amount || amount <= 0) {
@@ -268,20 +271,18 @@
             }
 
             try {
-                const response = await fetch('/api/pay', {
+                const response = await fetch('/api/create-checkout', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ amount: parseFloat(amount) })
                 });
-                const result = await response.json();
 
-                if (result.success) {
-                    showMessage(result.message, 'success');
-                    document.getElementById('balance-amount').innerHTML = `$${result.new_balance.toFixed(2)}`;
-                    document.getElementById('payment-amount').value = '';
-                    setTimeout(() => location.reload(), 1500);
+                const data = await response.json();
+
+                if (data.url) {
+                    window.location.href = data.url;
                 } else {
-                    showMessage(result.message, 'error');
+                    showMessage('Error: ' + data.error, 'error');
                 }
             } catch (error) {
                 showMessage('Payment failed. Please try again.', 'error');
