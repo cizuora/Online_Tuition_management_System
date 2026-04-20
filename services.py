@@ -164,6 +164,8 @@ class TuitionService:
             "payment_deadline": self._get_payment_deadline(semester),
         }
 
+        
+
     def process_payment(self, student_id: str, amount: float) -> Dict:
         """
         @brief Process a tuition payment.
@@ -178,13 +180,11 @@ class TuitionService:
         3. Processes the payment
         4. Returns result with new balance
         """
-        # Find the student
         student = Student.find_by_student_id(student_id)
 
         if not student:
             return {"success": False, "message": f"Student {student_id} not found"}
 
-        # Validate amount
         if amount <= 0:
             return {
                 "success": False,
@@ -193,10 +193,8 @@ class TuitionService:
                 "current_balance_formatted": f"${student.balance:,.2f}",
             }
 
-        # Round to 2 decimal places
         amount = round(amount, 2)
 
-        # Check if amount exceeds balance
         if amount > student.balance:
             return {
                 "success": False,
@@ -210,9 +208,27 @@ class TuitionService:
         success, message = student.make_payment(amount)
 
         if success:
-            # If student was on a payment plan, check if plan is complete
-            if self._is_on_payment_plan(student.id) and student.balance == 0:
-                self._complete_payment_plan(student.id)
+            # UPDATE PAYMENT PLAN PROGRESS
+            if self._is_on_payment_plan(student.id):
+                plan = self._active_plans.get(student.id)
+                if plan:
+                    # Decrease remaining payments
+                    plan['remaining_payments'] = plan.get('remaining_payments', plan['num_payments']) - 1
+                    
+                    # Calculate next payment due date
+                    from datetime import datetime, timedelta
+                    payments_made = plan['num_payments'] - plan['remaining_payments']
+                    plan['next_payment_due'] = (datetime.now() + timedelta(days=30 * (payments_made + 1))).strftime("%Y-%m-%d")
+                    
+                    # Check if plan is complete
+                    if plan['remaining_payments'] <= 0 or student.balance == 0:
+                        plan['is_active'] = False
+                        plan['completed_on'] = datetime.now().strftime("%Y-%m-%d")
+                        print(f"✅ Payment plan completed for {student.name}")
+                
+                # If student balance is zero, complete the plan
+                if student.balance == 0:
+                    self._complete_payment_plan(student.id)
 
             return {
                 "success": True,
@@ -224,6 +240,7 @@ class TuitionService:
                 "new_balance": student.balance,
                 "new_balance_formatted": f"${student.balance:,.2f}",
                 "fully_paid": student.balance == 0,
+                "payment_plan_updated": self._is_on_payment_plan(student.id)
             }
         else:
             return {
@@ -232,6 +249,7 @@ class TuitionService:
                 "current_balance": student.balance,
                 "current_balance_formatted": f"${student.balance:,.2f}",
             }
+    
 
     def get_payment_history(self, student_id: str) -> Optional[Dict]:
         """
@@ -622,8 +640,23 @@ class TuitionService:
         return student_id in self._active_plans
 
     def _get_payment_plan(self, student_id: int) -> Optional[Dict]:
-        """Get active payment plan for a student."""
-        return self._active_plans.get(student_id)
+        """Get active payment plan for a student with progress."""
+        plan = self._active_plans.get(student_id)
+        if plan:
+            # Calculate remaining payments if not set
+            if 'remaining_payments' not in plan:
+                plan['remaining_payments'] = plan['num_payments']
+            
+            # Calculate progress percentage
+            payments_made = plan['num_payments'] - plan['remaining_payments']
+            plan['progress_percentage'] = (payments_made / plan['num_payments']) * 100
+            
+            # Set next payment due
+            if 'next_payment_due' not in plan:
+                from datetime import datetime, timedelta
+                plan['next_payment_due'] = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+        
+        return plan
 
     def _save_payment_plan(
         self, student_id: int, plan_type: str, num_payments: int, payment_amount: float

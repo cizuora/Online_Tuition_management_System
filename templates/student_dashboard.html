@@ -162,6 +162,21 @@
             border-radius: 8px;
             margin-top: 20px;
         }
+
+        .progress-bar {
+            background: #ddd;
+            border-radius: 10px;
+            height: 10px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-bar-fill {
+            background: #28a745;
+            height: 100%;
+            width: 0;
+            transition: width 0.3s ease;
+        }
     </style>
 </head>
 
@@ -225,6 +240,36 @@
             </div>
 
             <!-- Right Column -->
+            <!-- Payment Plan Status Section -->
+            <div class="card" style="margin-bottom: 20px;">
+                <h2>Payment Plan Status</h2>
+                {% if student and student.payment_plan %}
+                <div class="summary-box" style="background: #e8f4fd;">
+                    <p><strong>✅ Active Plan:</strong> {{ student.payment_plan.plan_type|title }} Plan</p>
+                    <p><strong>Payment Amount:</strong> ${{ "%.2f"|format(student.payment_plan.payment_amount) }}</p>
+                    <p><strong>Payments Made:</strong> {{ student.payment_plan.num_payments -
+                        student.payment_plan.remaining_payments }} of {{ student.payment_plan.num_payments }}</p>
+                    <p><strong>Remaining Payments:</strong> {{ student.payment_plan.remaining_payments }}</p>
+                    <p><strong>Next Payment Due:</strong> {{ student.payment_plan.next_payment_due or '30 days from enrollment' }}
+                    </p>
+            
+                    <!-- Progress Bar -->
+                    <div style="margin-top: 10px;">
+                        <div style="background: #ddd; border-radius: 10px; height: 10px; overflow: hidden;">
+                            <div style="background: #28a745; width: {{ student.payment_plan.progress_percentage }}%; height: 100%;">
+                            </div>
+                        </div>
+                        <p style="font-size: 12px; margin-top: 5px;">{{ "%.0f"|format(student.payment_plan.progress_percentage) }}%
+                            Complete</p>
+                    </div>
+                </div>
+                {% else %}
+                <div class="summary-box" style="background: #fff3cd;">
+                    <p><strong>⚠️ No Active Payment Plan</strong></p>
+                    <p>Contact your administrator to enroll in a payment plan.</p>
+                </div>
+                {% endif %}
+            </div>
             <div class="card">
                 <h2>Fee Statement</h2>
                 {% if statement %}
@@ -296,6 +341,16 @@
                 messageArea.innerHTML = '';
             }, 3000);
         }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const progressFill = document.querySelector('.progress-bar-fill');
+            if (progressFill) {
+                const progress = parseFloat(progressFill.dataset.progress);
+                if (!isNaN(progress)) {
+                    progressFill.style.width = progress + '%';
+                }
+            }
+        });
     </script>
 </body>
 
