@@ -265,6 +265,20 @@ def create_checkout():
         if not student:
             return jsonify({"error": "Student not found"}), 404
 
+        # ---------- NEW: Validate against current balance ----------
+        if amount > student.balance:
+            return (
+                jsonify(
+                    {
+                        "error": f"Amount exceeds your balance of ${student.balance:.2f}",
+                        "current_balance": student.balance,
+                        "current_balance_formatted": f"${student.balance:,.2f}",
+                    }
+                ),
+                400,
+            )
+        # ------------------------------------------------------------
+
         # Store amount in session to use after payment
         session["pending_payment_amount"] = amount
 
@@ -323,20 +337,27 @@ def debug_data():
 @app.route("/payment-success")
 def payment_success():
     """Handle successful payment and update balance."""
-    # Get amount from URL parameter
     amount = request.args.get("amount", type=float)
     student_id = session.get("student_id")
 
-    if student_id and amount:
-        # Process the payment
-        result = tuition_service.process_payment(student_id, amount)
-        print(f"Payment processed: {result}")
+    if not student_id or not amount:
+        # Missing data – redirect to dashboard with an error
+        session["payment_message"] = "Payment information missing. Please try again."
+        return redirect(url_for("student_dashboard"))
 
-        if result.get("success"):
-            # Store success message for dashboard
-            session["payment_message"] = f"Payment of ${amount:.2f} was successful!"
+    # Process the payment
+    result = tuition_service.process_payment(student_id, amount)
+    print(f"Payment processed: {result}")
 
-    return render_template("success.html")
+    if result.get("success"):
+        session["payment_message"] = f"Payment of ${amount:.2f} was successful!"
+        return render_template("success.html")
+    else:
+        # Payment was rejected (e.g., amount exceeded balance after a race condition)
+        session["payment_message"] = (
+            f"Payment failed: {result.get('message', 'Unknown error')}"
+        )
+        return redirect(url_for("student_dashboard"))
 
 
 @app.route("/payment-cancel")
